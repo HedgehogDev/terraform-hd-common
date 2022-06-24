@@ -1,0 +1,94 @@
+name: "Sync from Template Repository"
+
+on:
+  # Execute at 9am EST Every Thursday
+  schedule:
+    - cron: "0 13 * * 4"
+
+  push:
+    paths:
+      - .github/workflows/sync-from-template.yml
+  
+  workflow_dispatch:
+
+env:
+  DESTINATION_REPOSITORY: ${{ github.repository }}
+  GIT_AUTHOR_NAME: ${{ github.repository_owner }}
+  GIT_AUTHOR_EMAIL: ${{ github.repository_owner }}@users.noreply.github.com
+  TEMPLATE_REPOSITORY: HedgehogDev/terraform-module-template
+  TEMPLATE_CHORE_BRANCH: chore/sync-from-template
+
+jobs:
+  syncFromTemplate:
+    if: github.repository != 'HedgehogDev/terraform-module-template'
+    name: Sync Changes from HedgehogDev/terraform-module-template Repository
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Template Repository
+        uses: actions/checkout@v3
+        with:
+          path: ${{ env.TEMPLATE_REPOSITORY }}
+          repository: ${{ env.TEMPLATE_REPOSITORY }}
+          ref: main
+          token: ${{ secrets.GIT_HUB_ACTIONS_TOKEN }}
+
+      - name: Checkout ${{ github.repository }} Repository
+        uses: actions/checkout@v3
+        with:
+          path: ${{ github.repository }}
+          repository: ${{ github.repository }}
+          token: ${{ secrets.GIT_HUB_ACTIONS_TOKEN }}
+
+      - name: Create Branch in ${{ github.repository }}
+        run: |
+          git -C "${DESTINATION_REPOSITORY}" fetch origin "${TEMPLATE_CHORE_BRANCH}" || true
+          git -C "${DESTINATION_REPOSITORY}" branch -a
+          git -C "${DESTINATION_REPOSITORY}" checkout -B ${TEMPLATE_CHORE_BRANCH} \
+            "remotes/origin/${TEMPLATE_CHORE_BRANCH}" || \
+          git -C "${DESTINATION_REPOSITORY}" checkout -b "${TEMPLATE_CHORE_BRANCH}"
+
+      - name: Copy Template Contents
+        run: |
+          _files="$(find ${TEMPLATE_REPOSITORY} \
+            ! -path "*/.git/*" \
+            ! -name "CHANGELOG.md" \
+            ! -name "README.md" \
+            ! -name "*.tf" \
+            -type f \
+            -print)"
+          for _file in ${_files}; do
+            _src="${_file}"
+            _dst="${DESTINATION_REPOSITORY}/${_file#${TEMPLATE_REPOSITORY}/}"
+            _dst="${_dst%/*}/"
+            mkdir -p "${_dst}"
+            echo "INFO: Copy '${_src}' to '${_dst}'."
+            cp "${_src}" "${_dst}"
+          done
+          git -C "${DESTINATION_REPOSITORY}" diff
+
+      - name: Commit Any Changes
+        run: |
+          git -C ${DESTINATION_REPOSITORY} config user.name "${GIT_AUTHOR_NAME}"
+          git -C ${DESTINATION_REPOSITORY} config \
+            user.email "${GIT_AUTHOR_EMAIL}"
+          git -C ${DESTINATION_REPOSITORY} add .
+          git -C ${DESTINATION_REPOSITORY} commit \
+            -m "Sync from Template@${{ github.sha }}"
+
+      - name: Push topic branch
+        run: git -C ${DESTINATION_REPOSITORY} push -u origin "${TEMPLATE_CHORE_BRANCH}"
+
+      - name: Create pull request
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_USER: ${{ github.actor }}
+        run: |
+          pushd ${DESTINATION_REPOSITORY}
+          hub pull-request \
+            -b main \
+            -h "${TEMPLATE_CHORE_BRANCH}" \
+            --no-edit \
+            -m "chore: Update Templates from ${TEMPLATE_REPOSITORY}" \
+            -m "chore: Update Templates from ${TEMPLATE_REPOSITORY}"
+          popd
