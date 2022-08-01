@@ -20,7 +20,7 @@ jobs:
 
       - name: Get Root Directories
         id: directories
-        uses: clowdhaus/terraform-composite-actions/directories@v1.5.0
+        uses: clowdhaus/terraform-composite-actions/directories@v1.6.0
 
   postCommitMaxVersion:
     name: Max Terraform Version Post-Commit
@@ -43,7 +43,7 @@ jobs:
           terraform_version: ${{ steps.minMax.outputs.maxVersion }}
 
       - name: Post-commit Terraform ${{ steps.minMax.outputs.maxVersion }}
-        uses: clowdhaus/terraform-composite-actions/pre-commit@v1.5.0
+        uses: clowdhaus/terraform-composite-actions/pre-commit@v1.6.0
         continue-on-error: true
         with:
           args: '--all-files --color always --config .post-commit-config.yaml --show-diff-on-failure'
@@ -51,7 +51,7 @@ jobs:
           terraform-docs-version: ${{ env.TERRAFORM_DOCS_VERSION }}
 
       - name: Commit Changes
-        uses: clowdhaus/terraform-composite-actions/commit@v1.5.0
+        uses: clowdhaus/terraform-composite-actions/commit@v1.6.0
         with:
           git-branch: 'main'
           github-repository: ${{ github.repository }}
